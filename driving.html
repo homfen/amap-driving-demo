@@ -1,0 +1,290 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+	<title>驾车路径规划</title>
+	<style type="text/css">
+		body{
+			margin:0;
+			height:100%;
+			width:100%;
+			position:absolute;
+		}
+		#mapContainer{
+			position: absolute;
+			top:0;
+			left: 0;
+			right:0;
+			bottom:0;
+		}
+        
+		#tip{
+			height:45px;
+			background-color:#fff;
+			padding-left:10px;
+			padding-right:10px;
+			border:1px solid #969696;
+			position:absolute;
+			font-size:12px;
+			right:10px;
+			bottom:30px;
+			border-radius:3px;
+			line-height:45px;
+		}
+		
+		#tip input[type='button']{
+			height:28px;
+			line-height:28px;
+			outline:none;
+			text-align:center;
+			padding-left:5px;
+			padding-right:5px;
+			color:#FFF;
+			background-color:#0D9BF2;
+			border:0;
+			border-radius: 3px;
+			margin-top:8px;
+			margin-left:5px;
+			cursor:pointer;
+			margin-right:10px;
+		}
+        
+        #search{
+			background-color:#fff;
+			padding:2px 10px;
+			border:1px solid #969696;
+			position:absolute;
+			font-size:12px;
+			left:10px;
+			top:30px;
+			border-radius:3px;
+			line-height:45px;
+		}
+        
+        #search input{height:20px;line-height:20px;}
+        #search #list{display:none;}
+        #search ul{list-style-type: none;margin:0;padding:0}
+        #search li{padding:5px 10px;height:15px;font-size:14px;line-height:15px;border-bottom:1px dashed #eee;cursor:pointer;}
+        #search li:hover{background:#eee;}
+	</style>
+</head>
+<body>
+	<div id="mapContainer" ></div>
+    <div id="tip">
+		<input type="button" value="开始动画" onclick="startAnimation()"/>
+	    <input type="button" value="停止动画" onclick="stopAnimation()"/>
+	</div>
+	<div id="search">
+        <label>起点：</label><input id="start" type="text" onkeyup="showList(this)"/><label style="margin-left:5px;">终点：</label><input id="end" type="text" onkeyup="showList(this)"/>
+        <div id="list"></div>
+    </div>
+	<script type="text/javascript" src="http://webapi.amap.com/maps?v=1.3&key=[---your key---]"></script>
+	<script type="text/javascript"> 
+		var route_text, steps, carmarker, carpath;
+		var polyline;
+		//基本地图加载
+		var map = new AMap.Map("mapContainer", {
+			resizeEnable: true,
+            zooms:[1,18],
+	    	view: new AMap.View2D({
+	        center:new AMap.LngLat(121.320876,31.194237),//地图中心点
+	        zoom:15 //地图显示的缩放级别
+	        })
+	    });
+		//起、终点
+		var start_xy = new AMap.LngLat(121.320876,31.194237);
+		var end_xy = new AMap.LngLat(121.351351, 31.221279);
+		//驾车导航
+		function driving_route() {
+			var MDrive;
+			AMap.service(["AMap.Driving"], function() {
+				var DrivingOption = {
+					policy: AMap.DrivingPolicy.LEAST_TIME
+				};        
+		        MDrive = new AMap.Driving(DrivingOption); //构造驾车导航类 
+		        //根据起终点坐标规划驾车路线
+		        MDrive.search(start_xy, end_xy, function(status, result){
+		        	if(status === 'complete' && result.info === 'OK'){
+		        		driving_routeCallBack(result);
+		        	}else{
+		        		alert(result);
+		        	}
+		        }); 
+		    });
+		}
+		//导航结果展示
+		function driving_routeCallBack(data) {
+			var routeS = data.routes;
+			if (routeS.length > 0){ 
+				route_text="";
+			 	for(var v =0; v< routeS.length;v++){
+					//驾车步骤数
+					steps = routeS[v].steps
+					var route_count = steps.length;
+					//行车距离（米）
+					var distance = routeS[v].distance;
+                }
+				drivingDrawLine();
+			} 	
+		}
+		//绘制驾车导航路线
+		function drivingDrawLine(s) {
+			//起点、终点图标
+			var sicon = new AMap.Icon({
+				image: "http://cache.amap.com/lbs/static/jsdemo002.png",
+				size:new AMap.Size(44,44),
+				imageOffset: new AMap.Pixel(-334, -180)
+			});
+			var startmarker = new AMap.Marker({
+				icon : sicon, //复杂图标
+				visible : true, 
+				position : start_xy,
+				map:map
+			});
+			var eicon = new AMap.Icon({
+				image: "http://cache.amap.com/lbs/static/jsdemo002.png",
+				size:new AMap.Size(44,44),
+				imageOffset: new AMap.Pixel(-334, -134)
+			});
+			var endmarker = new AMap.Marker({
+				icon : eicon, //复杂图标
+				visible : true, 
+				position : end_xy,
+				map:map
+			});
+            
+            carmarker = new AMap.Marker({
+                icon:"http://code.mapabc.com/images/car_03.png",
+                map:map,
+                position:start_xy,
+                offset:{
+                    x:-28,
+                    y:-16
+                },
+                autoRotation:true
+            });
+            
+			var drawpath = new Array(); 
+            carpath = new Array();
+			for(var s=0; s<steps.length; s++) {
+				var plength = steps[s].path.length;
+				for (var p=0; p<plength; p++) {
+                    var c = steps[s].path[p];
+					drawpath.push(c);
+                    carpath.push(new AMap.LngLat(c.lng,c.lat));
+				}
+			}
+			var polyline = new AMap.Polyline({
+				map: map,
+				path: drawpath,
+				strokeColor: "#9400D3",
+				strokeOpacity: 0.7,
+				strokeWeight: 4,
+				strokeDasharray: [10, 5]
+			});
+		}
+        
+        function startAnimation() {
+			carmarker.moveTo(carpath,1000);
+        }
+        
+        function stopAnimation() {   
+            carmarker.stopMove();
+            moveStep = 0;
+        }
+		
+		driving_route();
+        
+        var start = document.querySelector("#start");
+        var end = document.querySelector("#end");
+        var list = document.querySelector("#list");
+        var searchTimer = null;
+        
+        list.addEventListener("click",function(e){
+            var target = e.target;
+            if(target.nodeName=="LI"){
+                var lat = target.getAttribute('lat');
+                var lng = target.getAttribute('lng');
+                var name = target.getAttribute('name');
+                var input = null;
+                if(list.getAttribute('target')=="start"){
+                    input = start;
+                }else{
+                    input = end;
+                }
+                input.value = name;
+                input.setAttribute('lat',lat);
+                input.setAttribute('lng',lng);
+                list.style.display = 'none';
+                setMap();
+            }
+        });
+        
+        function setMap(){
+            var startx = start.getAttribute('lng');
+            var starty = start.getAttribute('lat');
+            var endx = end.getAttribute('lng');
+            var endy = end.getAttribute('lat');
+            if(startx && starty && endx && endy){
+                map = new AMap.Map("mapContainer", {
+                    resizeEnable: true,
+                    zooms:[1,18],
+                    view: new AMap.View2D({
+                    center:new AMap.LngLat(startx,starty),//地图中心点
+                    zoom:15 //地图显示的缩放级别
+                    })
+                });
+                //起、终点
+                start_xy = new AMap.LngLat(startx,starty);
+                end_xy = new AMap.LngLat(endx, endy);
+                driving_route();
+            }
+        }
+        
+        function showList(self){
+            if(searchTimer){
+                clearTimeout(searchTimer);
+            }
+            var value = self.value.replace(/^\s+|\s+$/g,"");
+            if(value!=""){
+                setTimeout(function(){
+                    list.setAttribute('target',self.id);
+                    placeSearch(value);
+                },1000);
+            }else{
+                list.style.display = "none";
+            }
+        }
+        
+        function placeSearch(text){
+		    var MSearch;
+		    AMap.service(["AMap.PlaceSearch"], function() {       
+		        MSearch = new AMap.PlaceSearch({ //构造地点查询类
+		            pageSize:10,
+		            pageIndex:1,
+		        });
+		        //关键字查询
+		        MSearch.search(text, function(status, result){
+		        	if(status === 'complete' && result.info === 'OK'){
+		        		keywordSearch_CallBack(result);
+		        	}
+		        }); 
+		    });
+		}
+        
+        function keywordSearch_CallBack(data){
+            if(data.info=="OK"){
+                pois = data.poiList.pois;
+                var html = '<ul>';
+                for(var i=0,len=pois.length;i<len;i++){
+                    var poi = pois[i];
+                    html += '<li lng="'+poi.location.lng+'" lat="'+poi.location.lat+'" name="'+poi.name+'">'+poi.name+'</li>';
+                }
+                html+='</ul>';
+                list.innerHTML = html;
+                list.style.display = "block";
+            }
+        }
+	</script>  
+</body>
+</html>
